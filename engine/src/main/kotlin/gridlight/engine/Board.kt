@@ -107,6 +107,9 @@ class Board private constructor(private val w: LongArray) {
             return Board(b.finish())
         }
 
+        /** Reads the grid only (see [parseBoard]); throws [ParseException]. Givens are locked, open cells get all nine candidates. */
+        fun parse(text: String): Board = parseBoard(text)
+
         internal fun wrap(w: LongArray): Board = Board(w)
     }
 }

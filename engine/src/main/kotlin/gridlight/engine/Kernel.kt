@@ -50,7 +50,7 @@ internal object Kernel {
         return w
     }
 
-    /** Makes cell [k] a given with digit [d0]; no peer elimination (see [computeCandidates]). */
+    /** Makes cell [k] a given with digit [d0]; no peer elimination (see [eliminateFilledFromPeers]). */
     fun setGiven(w: LongArray, k: Int, d0: Int) {
         setRaw(w, k, TAG or (1 shl d0))
         setMaskBit(w, GIVEN, k, true)

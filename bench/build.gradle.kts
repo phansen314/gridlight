@@ -1,6 +1,6 @@
 plugins {
-    kotlin("jvm") version "2.4.21"
-    id("me.champeau.jmh") version "0.7.4"
+    kotlin("jvm")
+    id("me.champeau.jmh")
 }
 
 kotlin { jvmToolchain(25) }

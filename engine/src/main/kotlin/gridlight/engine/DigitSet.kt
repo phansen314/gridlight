@@ -2,7 +2,7 @@ package gridlight.engine
 
 /** Set of digits 1..9; bit n-1 = digit n. Bits 9..31 are always zero. Not [Iterable] (D9). */
 @JvmInline
-value class DigitSet @PublishedApi internal constructor(@PublishedApi internal val bits: Int) {
+value class DigitSet internal constructor(@PublishedApi internal val bits: Int) { // @PublishedApi: bits is read by the inline helpers
     val size: Int get() = Integer.bitCount(bits)
     fun isEmpty(): Boolean = bits == 0
     val first: Digit

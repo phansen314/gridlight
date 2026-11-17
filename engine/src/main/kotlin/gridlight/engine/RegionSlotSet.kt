@@ -2,7 +2,7 @@ package gridlight.engine
 
 /** Set of slots 0..8; bit i = slot i. Bits 9..31 are always zero. Not [Iterable] (D9). */
 @JvmInline
-value class RegionSlotSet @PublishedApi internal constructor(@PublishedApi internal val bits: Int) {
+value class RegionSlotSet internal constructor(@PublishedApi internal val bits: Int) { // @PublishedApi: bits is read by the inline helpers
     val size: Int get() = Integer.bitCount(bits)
     fun isEmpty(): Boolean = bits == 0
     val first: RegionSlot

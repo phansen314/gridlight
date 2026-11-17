@@ -1,5 +1,7 @@
 package gridlight.engine
 
+// @PublishedApi on the constructors of Digit, CellIndex and RegionSlot: the sets' inline helpers build them.
+
 // Scalar value classes (D9, D12, D14). Range checked once, in `of`; internal code that already knows a value
 // is valid uses the unchecked constructor.
 
@@ -16,7 +18,7 @@ value class Digit @PublishedApi internal constructor(val value: Int) { // 1..9
 }
 
 @JvmInline
-value class Row @PublishedApi internal constructor(val value: Int) { // 1..9
+value class Row internal constructor(val value: Int) { // 1..9
     override fun toString(): String = "r$value"
 
     companion object {
@@ -28,7 +30,7 @@ value class Row @PublishedApi internal constructor(val value: Int) { // 1..9
 }
 
 @JvmInline
-value class Column @PublishedApi internal constructor(val value: Int) { // 1..9
+value class Column internal constructor(val value: Int) { // 1..9
     override fun toString(): String = "c$value"
 
     companion object {

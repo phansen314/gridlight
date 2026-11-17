@@ -4,8 +4,8 @@ package gridlight.engine
  * Set of cells in the 54 | 27 band split (D7): [lo] = cells 0..53, [hi] = cells 54..80. Bits above each part
  * (lo bits 54..63, hi bits 27..63) are always zero. Not [Iterable] (D9).
  */
-class CellSet @PublishedApi internal constructor(
-    @PublishedApi internal val lo: Long,
+class CellSet internal constructor(
+    @PublishedApi internal val lo: Long, // @PublishedApi: read by the inline helpers
     @PublishedApi internal val hi: Long,
 ) {
     val size: Int get() = java.lang.Long.bitCount(lo) + java.lang.Long.bitCount(hi)
@@ -43,7 +43,7 @@ class CellSet @PublishedApi internal constructor(
         while (b != 0L) {
             val n = java.lang.Long.numberOfTrailingZeros(b)
             b = b and (b - 1)
-            action(CellIndex(n + 54))
+            action(CellIndex(n + BAND))
         }
     }
 
@@ -58,7 +58,7 @@ class CellSet @PublishedApi internal constructor(
         while (b != 0L) {
             val n = java.lang.Long.numberOfTrailingZeros(b)
             b = b and (b - 1)
-            if (predicate(CellIndex(n + 54))) return true
+            if (predicate(CellIndex(n + BAND))) return true
         }
         return false
     }
@@ -74,7 +74,7 @@ class CellSet @PublishedApi internal constructor(
         while (b != 0L) {
             val n = java.lang.Long.numberOfTrailingZeros(b)
             b = b and (b - 1)
-            if (!predicate(CellIndex(n + 54))) return false
+            if (!predicate(CellIndex(n + BAND))) return false
         }
         return true
     }
@@ -102,9 +102,9 @@ class CellSet @PublishedApi internal constructor(
     }
 
     companion object {
-        @PublishedApi internal const val BAND = 54
+        @PublishedApi internal const val BAND = 54 // inline helpers use it
         val EMPTY: CellSet = CellSet(0L, 0L)
-        val ALL: CellSet = CellSet((1L shl 54) - 1, (1L shl 27) - 1)
+        val ALL: CellSet = CellSet((1L shl BAND) - 1, (1L shl (81 - BAND)) - 1)
         fun of(c: CellIndex): CellSet = EMPTY + c
         fun of(vararg ks: Int): CellSet {
             var s = EMPTY
@@ -125,7 +125,7 @@ class CellSetIterator internal constructor(private var lo: Long, private var hi:
         if (hi != 0L) {
             val n = java.lang.Long.numberOfTrailingZeros(hi)
             hi = hi and (hi - 1)
-            return CellIndex(n + 54)
+            return CellIndex(n + CellSet.BAND)
         }
         throw NoSuchElementException()
     }

@@ -25,7 +25,7 @@ Standalone Gradle project (`bench/`): Gradle 9.8.2 wrapper, Kotlin 2.4.21, JDK 2
 | `src/main/.../Board.kt` (hooks) | `unitCell(u, i)`, `peerCell(k, j)`, `scanNakedSingles(out)`, `scanHiddenSingles(out)` (the singles solver now calls this one; the default is the bit-sliced scan, so the other boards' solve is unchanged) and `placesInUnit(u, d)` are interface methods with default implementations that read cell by cell, so a board can override them with table or word-level versions. Packed and Short use the defaults, which inline to exactly what they did before. |
 | `src/main/.../Algorithms.kt` | Written once, independent of representation: parse plus initial candidates, unit "missing digits" masks, naked-single scan, hidden-single scan in two forms (literal per-unit/per-digit count, and bit-sliced once/twice), and a singles-only solver. |
 | `src/main/.../Puzzles.kt` | 8 published puzzles: Euler #96 grids 01–03, Norvig hard1, Inkala, one 17-clue puzzle, two from Norvig's "hardest" list. With singles only, 4 are solved and 4 get stuck. |
-| `src/main/.../MemoryReport.kt` | JOL footprint (`./gradlew memoryReport`). |
+| `src/main/.../MemoryReport.kt` | JOL footprint (`./gradlew :bench:memoryReport`). |
 | `src/test/.../BoardAgreementTest.kt` | Correctness checks (below). |
 | `src/jmh/.../BoardBench.kt` | All benchmarks, in one abstract class inherited by `PackedBench` and `ShortBench`. |
 
@@ -87,20 +87,19 @@ The generated machine code itself hasn't been inspected; that needs perfasm.
 ## How to run
 
 ```sh
-cd bench
-./gradlew test                     # correctness first
-./gradlew memoryReport             # JOL footprint
-./gradlew jmh -Pjmh.smoke          # quick run of all benchmarks (1 fork, short iterations)
-./gradlew jmh -Pjmh.includes=solveSinglesE2E    # filter by regex
-./gradlew jmh                      # full run using the class annotations (2 forks × 5×1 s), ~5 min
+./gradlew :bench:test                     # correctness first
+./gradlew :bench:memoryReport             # JOL footprint
+./gradlew :bench:jmh -Pjmh.smoke          # quick run of all benchmarks (1 fork, short iterations)
+./gradlew :bench:jmh -Pjmh.includes=solveSinglesE2E    # filter by regex
+./gradlew :bench:jmh                      # full run using the class annotations (2 forks × 5×1 s), ~5 min
 
 # Or drive JMH directly (more control):
-./gradlew jmhJar
-java -jar build/libs/board-repr-bench-jmh.jar -l
-java -jar build/libs/board-repr-bench-jmh.jar -f 1 -wi 2 -i 3 -w 300ms -r 300ms -prof gc
-java -jar build/libs/board-repr-bench-jmh.jar 'eliminatePeers' -prof perfasm   # codegen (needs perf + hsdis)
+./gradlew :bench:jmhJar
+java -jar bench/build/libs/bench-jmh.jar -l
+java -jar bench/build/libs/bench-jmh.jar -f 1 -wi 2 -i 3 -w 300ms -r 300ms -prof gc
+java -jar bench/build/libs/bench-jmh.jar 'eliminatePeers' -prof perfasm   # codegen (needs perf + hsdis)
 # inlining/type-profile check without perf:
-java -jar build/libs/board-repr-bench-jmh.jar PackedTableBench.unitMissingMasks -f 1 -wi 2 -i 1 \
+java -jar bench/build/libs/bench-jmh.jar PackedTableBench.unitMissingMasks -f 1 -wi 2 -i 1 \
   -jvmArgsAppend "-XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining" | grep -E 'Board::|TypeProfile'
 ```
 

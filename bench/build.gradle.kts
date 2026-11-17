@@ -3,11 +3,10 @@ plugins {
     id("me.champeau.jmh") version "0.7.4"
 }
 
-repositories { mavenCentral() }
-
 kotlin { jvmToolchain(25) }
 
 dependencies {
+    implementation(project(":engine"))
     implementation("org.openjdk.jol:jol-core:0.17") // memory-per-board report only
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
@@ -22,7 +21,7 @@ tasks.test {
 jmh {
     jmhVersion.set("1.37")
     // Defaults are JMH's own (5 forks x 5 iterations x 10 s). For a quick run pass e.g.
-    //   ./gradlew jmh -Pjmh.smoke
+    //   ./gradlew :bench:jmh -Pjmh.smoke
     // or build the jar and drive JMH directly (see REPORT.md).
     if (project.hasProperty("jmh.smoke")) {
         fork.set(1)

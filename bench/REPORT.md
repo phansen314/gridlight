@@ -1,18 +1,20 @@
-# Board representation benchmark: draft for the board-representation research
+# Board representation benchmark
 
-Status: **draft**. Code builds, the tests pass, and JMH smoke runs finished. A full run has not been done.
-Four boards are compared:
+Started as a draft for the board-representation research, comparing four prototype boards:
 - `PackedBoard`: the decided layout, using `k/6` arithmetic.
 - `PackedTableBoard`: the same layout and bits, with table-driven locations and one word-at-a-time scan.
 - `PlanesBoard`: PackedTable plus nine digit planes kept in step. It's the design decided in the project's scope notes;
   see "Fourth board" below.
 - `ShortBoard`: the baseline.
-Branch `research/bench-board-repr`, not committed.
+
+The engine's real `Board` (`engine/`) has since been built; it is measured against these prototypes in the last
+section, "The real `Board` against the prototypes". The sections before it are the original research and describe
+the prototypes, not the engine (the engine follows `decisions.md`: no digit planes in the board, D18).
 
 ## What's implemented
 
-Standalone Gradle project (`bench/`): Gradle 9.8.2 wrapper, Kotlin 2.4.21, JDK 25 toolchain,
-`me.champeau.jmh` 0.7.4, JMH 1.37, JOL 0.17, JUnit 5.
+Subproject `bench` of the root Gradle build (depends on `engine`): Gradle 9.8.2 wrapper, Kotlin 2.4.21, JDK 25
+toolchain, `me.champeau.jmh` 0.7.4, JMH 1.37, JOL 0.17, JUnit 5.
 
 | File | Contents |
 |---|---|
@@ -28,6 +30,7 @@ Standalone Gradle project (`bench/`): Gradle 9.8.2 wrapper, Kotlin 2.4.21, JDK 2
 | `src/main/.../MemoryReport.kt` | JOL footprint (`./gradlew :bench:memoryReport`). |
 | `src/test/.../BoardAgreementTest.kt` | Correctness checks (below). |
 | `src/jmh/.../BoardBench.kt` | All benchmarks, in one abstract class inherited by `PackedBench` and `ShortBench`. |
+| `src/jmh/.../RealBoardBench.kt` | The engine's real `Board` / `Transient` through the same workloads (last section). |
 
 **Why two Longs for the given mask, not a BooleanArray:** there's no second array object to allocate,
 copy, compare or hash. The bits line up with the packed layout. It costs 16 bytes against about 104 for

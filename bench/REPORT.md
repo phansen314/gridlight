@@ -365,8 +365,8 @@ board, `cells.forEach { }` 18.6.
   elimination is 10.05 ns on top of the copy against the prototype's 10.17.
 - **Regressions against PackedTable, reported not redesigned (D18):**
   1. **The hidden-single scan computed from the cells is 1.86× the prototype's generic bit-sliced scan and
-     3.1× PlanesBoard's.** It is why `solveSinglesE2E` is 1.52× slower (2242 vs 1472 ns); the other 0.2 of the
-     gap is per-cell value-class work in the cell-by-cell loop. The scan does 9 `cellsWithCandidate`
+     3.1× PlanesBoard's.** It is the likely main cause of `solveSinglesE2E` being 1.52× slower (2242 vs 1472 ns); I
+     did not profile the loop to split the 770 ns gap between the scan and the per-cell reads and writes. The scan does 9 `cellsWithCandidate`
      computations plus `filledIn` for all 27 regions plus 243 `CellSet` intersections and sizes, and allocates.
      Using `scanNakedSingles` in the loop recovers 400 ns (1842, still 1.25× PackedTable). The solver state's planes
      (later) are the intended cure for the scan.

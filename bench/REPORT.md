@@ -316,3 +316,71 @@ naive reads. The costs are memory (1.9× per board) and copy time (+1.6 to +5 ns
    unequal.
 8. **Wire format**: not touched. 81 × u16 maps straight onto the ShortArray layout, which is a minor
    point in favor of keeping a ShortArray view.
+
+## The real `Board` against the prototypes (@176)
+
+`RealBoardBench` (`src/jmh/.../RealBoardBench.kt`) runs the engine's public `Board` / `Transient` through the
+same workloads as the prototypes, so the rows line up with PackedTableBench (the prototype without planes, the
+D18 reference) and PlanesBench. Costs of the real API are *in* the numbers: `CellIndex.of` / `Digit.of` range
+checks, the immutable `Board`'s array copy, `Geometry` passed as a parameter (D11), value classes and own
+iterators (D9), `place` followed by an explicit `eliminateFromPeers` (D19), and an `LongArray(18)` (D17, D18).
+In setup, both real-board solvers must reproduce the prototype solver's placement count and status on all 8
+puzzles, or the run aborts.
+
+Command: `-f 2 -wi 3 -i 5 -w 500ms -r 500ms` (2 forks, 5 × 0.5 s), same machine as above (Ryzen 9 7900X,
+OpenJDK 25.0.4.1). Raw: `build/results/real.{txt,json}` (gitignored). ns per op, one op as in the tables above.
+Errors are ≤ 3 % except the ones marked.
+
+| benchmark | PackedTable | Planes | **Board** | Board / PackedTable |
+|---|---:|---:|---:|---:|
+| readRandomK | 1.31 | 1.29 | 1.16 | 0.89 |
+| readRandomRC | 1.30 | 1.30 | 1.52 | 1.17 |
+| nakedSingleScanNative | 19.96 | 20.27 | 18.36 | 0.92 |
+| hiddenSingleScanNative (Board: from the cells) | 301 | 181 | **560** (±36) | **1.86** |
+| placesAllUnits (Board: `slotsOf(cellsWithCandidate(d))`) | 1666 (generic) | **92.7** | 246 | 0.15 (2.65× Planes) |
+| eliminatePeersBulk (+ copy) | 13.74 | 16.57 | 17.35 | 1.26 (copy-adjusted 0.99) |
+| copy (allocating) | 5.70 | 10.95 | 7.30 | **1.28** |
+| equalsHit | 4.09 | 3.77 | 3.29 | 0.80 |
+| equalsMissLastCell | 4.43 | 3.83 | 3.49 | 0.79 |
+| hashCode (Board: cached field) / hashThenEquals | 18.30 | 17.14 | 3.96 | 0.22 (cached) |
+| parseAndInit | 785 | 1100 | 391 | 0.50 |
+| **solveSinglesE2E** (same cell-by-cell algorithm, + copy) | 1472 | 1392 | **2242** (±136) | **1.52** |
+| solveSinglesE2E using `scanNakedSingles` | – | – | 1842 (±130) | 1.25 |
+
+Only on the real board (no prototype equivalent): `editPlaceAndEliminatePeers` 18.2 (one singles step through
+`edit {}`: copy, place, bulk elimination, wrap), `placeThenEliminatePeersImmutable` 25.0 (two allocating
+changes), `eliminateSingleImmutable` 7.6, `editNoChange` 6.8 (copy, no-op writes, original returned),
+`editThenHash` 18.0 (a fresh board's first `hashCode` costs ≈ 10 ns on top of the edit), `hashCodeCached` 0.26,
+`HashSet<Board>` over 1024 distinct boards: insert 6.2, lookup hit 9.3 (hash + equals on equal, different
+objects), lookup miss 1.25 (hashes are cached after the first iteration, so a never-hashed board adds ≈ 10 ns).
+`cellsWithCandidate` for all 9 digits 48 per board (≈ 5.4 each); `filledIn` + `missingIn` + `duplicatesIn` over 27
+regions 419 per board (≈ 5 per call). Iterating the open cells (≈ 55 per puzzle): `for (c in cells)` 61 per
+board, `cells.forEach { }` 18.6.
+
+### Verdict
+
+- **Fine, at or better than PackedTable:** reads (`readRandomRC` 17 % slower from the two range checks),
+  the naked-single scan, equality (`Arrays.equals` over 16 words beats the prototype's), hashing (cached),
+  parse + initial candidates (half, from the bulk peer elimination), and the write itself: bulk peer
+  elimination is 10.05 ns on top of the copy against the prototype's 10.17.
+- **Regressions against PackedTable, reported not redesigned (D18):**
+  1. **The hidden-single scan computed from the cells is 1.86× the prototype's generic bit-sliced scan and
+     3.1× PlanesBoard's.** It is why `solveSinglesE2E` is 1.52× slower (2242 vs 1472 ns); the other 0.2 of the
+     gap is per-cell value-class work in the cell-by-cell loop. The scan does 9 `cellsWithCandidate`
+     computations plus `filledIn` for all 27 regions plus 243 `CellSet` intersections and sizes, and allocates.
+     Using `scanNakedSingles` in the loop recovers 400 ns (1842, still 1.25× PackedTable). The solver state's planes
+     (later) are the intended cure for the scan.
+  2. **`copy` is 1.28× the prototype's** (7.3 vs 5.7): 18 words instead of 16, and `Transient` is a second
+     object around the array. It disappears next to a single write (the copy-adjusted bulk elimination is equal).
+  3. `for (c in cellSet)` is 3.3× slower than `cellSet.forEach { }` (61 vs 18.6 per board of ≈ 55 cells): the own
+     iterator object isn't always scalar-replaced. Use `forEach` / `any` / `all` in hot loops; `for` is fine elsewhere.
+- **Distance to the planes (input for the solver state):** `slotsOf(cellsWithCandidate(d))` for all regions and
+  digits takes 246 ns per board against PlanesBoard's 92.7 (2.65× slower), and is 6.8× faster than the
+  prototypes' generic cell-by-cell `placesInUnit`. About 48 ns of the 246 is the nine `cellsWithCandidate` calls
+  (what planes make free); the rest is 243 `slotsOf` calls (`Long.compress` ×2 each), which planes don't avoid.
+- **Cost of the D11 `geometry` parameter, D9 value classes, D19 explicit elimination:** not separately
+  measurable here beyond what the rows above include. Bulk peer elimination (geometry table read through a
+  parameter, no extra cost over the prototype's static table), reads (value classes, equal or faster) and the
+  place + eliminate step (18.2 ns including its copy) show no regression from them.
+- Memory is unchanged by design: 16 more bytes per board for the open mask (D17), no planes (D18). Not
+  re-measured with JOL (`memoryReport` still covers only the prototypes).

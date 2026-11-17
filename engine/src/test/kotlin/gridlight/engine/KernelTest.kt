@@ -36,7 +36,7 @@ class KernelTest {
             val k = rnd.nextInt(81)
             if (!ref.given[k]) { val d0 = rnd.nextInt(9); Kernel.setGiven(w, k, d0); ref.setGiven(k, d0) }
         }
-        Kernel.computeCandidates(w, g); ref.computeCandidates()
+        if (rnd.nextBoolean()) { assertEquals(ref.eliminateFilledFromPeers(), Kernel.eliminateFilledFromPeers(w, g)) }
         return w to ref
     }
 
@@ -55,9 +55,12 @@ class KernelTest {
             assertAgree(w, ref, "seed $seed start")
             repeat(60) { step ->
                 val k = rnd.nextInt(81); val d0 = rnd.nextInt(9)
-                val mask = rnd.nextInt(0, 0x200)
-                val (name, got, want) = when (rnd.nextInt(6)) {
-                    0, 1 -> Triple("place r${k} $d0", Kernel.place(w, k, d0, g), ref.place(k, d0))
+                val mask = if (rnd.nextBoolean()) rnd.nextInt(0, 0x200) else rnd.nextInt(0, 0x200) and rnd.nextInt(0, 0x200) and rnd.nextInt(0, 0x200)
+                val (name, got, want) = when (rnd.nextInt(9)) {
+                    0, 1 -> Triple("place $k $d0", Kernel.place(w, k, d0), ref.place(k, d0))
+                    6 -> Triple("clear $k", Kernel.clear(w, k), ref.clear(k))
+                    7 -> Triple("eliminateFromPeers $k $d0", Kernel.eliminateFromPeers(w, k, d0, g), ref.eliminateFromPeers(k, d0))
+                    8 -> Triple("eliminateFilledFromPeers", Kernel.eliminateFilledFromPeers(w, g), ref.eliminateFilledFromPeers())
                     2 -> Triple("eliminate $k $d0", Kernel.eliminate(w, k, d0), ref.eliminate(k, d0))
                     3 -> Triple("eliminateDigits $k $mask", Kernel.eliminateDigits(w, k, mask), ref.eliminateDigits(k, mask))
                     4 -> Triple("setCandidates $k $mask", Kernel.setCandidates(w, k, mask), ref.setCandidates(k, mask))
@@ -79,9 +82,9 @@ class KernelTest {
     }
 
     @Test fun `writes to a given change nothing`() {
-        val w = Kernel.empty(); Kernel.setGiven(w, 10, 4); Kernel.computeCandidates(w, g)
+        val w = Kernel.empty(); Kernel.setGiven(w, 10, 4); Kernel.eliminateFilledFromPeers(w, g)
         val before = w.copyOf()
-        assertFalse(Kernel.place(w, 10, 2, g)); assertFalse(Kernel.setCandidates(w, 10, 0x3))
+        assertFalse(Kernel.place(w, 10, 2)); assertFalse(Kernel.clear(w, 10)); assertFalse(Kernel.setCandidates(w, 10, 0x3))
         assertFalse(Kernel.eliminate(w, 10, 4)); assertFalse(Kernel.eliminateDigits(w, 10, 0x1FF))
         assertFalse(Kernel.eliminateCells(w, CellSet.of(10), 4))
         assertContentEquals(before, w)
@@ -89,16 +92,37 @@ class KernelTest {
 
     @Test fun `no-op writes report false and leave the array unchanged`() {
         val w = Kernel.empty()
-        assertTrue(Kernel.place(w, 40, 3, g))
+        assertTrue(Kernel.place(w, 40, 3))
         val before = w.copyOf()
-        assertFalse(Kernel.place(w, 40, 3, g))
-        assertFalse(Kernel.eliminate(w, 41, 3))      // already removed by the placement
+        assertFalse(Kernel.place(w, 40, 3))
+        assertFalse(Kernel.clear(w, 41))             // open: no-op
+        assertFalse(Kernel.eliminate(w, 40, 3))      // filled: no-op
+        assertFalse(Kernel.setCandidates(w, 40, 0x7)) // filled: no-op
         assertFalse(Kernel.setCandidates(w, 0, 0x1FF))
         assertContentEquals(before, w)
     }
 
-    @Test fun `givens only come from setGiven and computeCandidates removes their digit from peers`() {
-        val w = Kernel.empty(); Kernel.setGiven(w, 0, 4); Kernel.computeCandidates(w, g)
+    @Test fun `place leaves peers alone, clear reopens with all candidates, cellsWithCandidate is open cells only`() {
+        val w = Kernel.empty()
+        Kernel.place(w, 40, 3)
+        assertEquals(0x1FF, Kernel.raw(w, 41))
+        assertFalse(CellIndex(40) in Kernel.cellsWithCandidate(w, 3))
+        assertEquals(80, Kernel.cellsWithCandidate(w, 3).size)
+        assertTrue(Kernel.clear(w, 40))
+        assertEquals(0x1FF, Kernel.raw(w, 40))
+        assertEquals(CellSet.ALL, Kernel.openCells(w))
+        assertNull(Kernel.violation(w))
+    }
+
+    @Test fun `eliminateFilledFromPeers covers every filled cell, not only givens`() {
+        val w = Kernel.empty(); Kernel.place(w, 0, 4)
+        assertTrue(Kernel.eliminateFilledFromPeers(w, g))
+        for (p in g.peers(CellIndex(0))) assertEquals(0x1FF and (1 shl 4).inv(), Kernel.raw(w, p.k))
+        assertFalse(Kernel.eliminateFilledFromPeers(w, g))
+    }
+
+    @Test fun `eliminateFilledFromPeers removes a given's digit from its peers`() {
+        val w = Kernel.empty(); Kernel.setGiven(w, 0, 4); Kernel.eliminateFilledFromPeers(w, g)
         for (p in g.peers(CellIndex(0))) assertEquals(0x1FF and (1 shl 4).inv(), Kernel.raw(w, p.k))
         assertEquals(0x1FF, Kernel.raw(w, 40))
         assertNull(Kernel.violation(w))

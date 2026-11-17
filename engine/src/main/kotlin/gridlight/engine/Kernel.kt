@@ -11,8 +11,17 @@ package gridlight.engine
  *    kept in step by every write.
  *  - equality and hash cover words 0..15 ([KEY_WORDS]); the open mask is excluded.
  *
- * Digits are 0-based (`d0` = digit - 1) inside the kernel. Writes to a given cell are no-ops that report no
- * change (D16). Every mutator returns whether anything changed.
+ * Digits are 0-based (`d0` = digit - 1) inside the kernel. Every mutator returns whether anything changed.
+ * Per cell state (D19):
+ *
+ *     operation           open               filled              given
+ *     place               fills it           replaces its digit  no-op
+ *     clear               no-op              open, all nine      no-op
+ *     eliminate*          removes candidates no-op               no-op
+ *     setCandidates       replaces           no-op               no-op
+ *
+ * No write touches any cell but its own, except [eliminateFromPeers] / [eliminateFilledFromPeers], which the
+ * caller asks for explicitly.
  */
 internal object Kernel {
     const val SIZE = 18
@@ -47,9 +56,14 @@ internal object Kernel {
         setMaskBit(w, GIVEN, k, true)
     }
 
-    /** Removes every given's digit from the candidates of its open peers: initial candidates (D12). */
-    fun computeCandidates(w: LongArray, geometry: Geometry) {
-        for (k in 0..80) if (isGiven(w, k)) eliminateFromPeers(w, k, Integer.numberOfTrailingZeros(raw(w, k) and DIGITS), geometry)
+    /** Removes every filled cell's digit (givens included) from the candidates of its open peers (D19). */
+    fun eliminateFilledFromPeers(w: LongArray, geometry: Geometry): Boolean {
+        var changed = false
+        for (k in 0..80) {
+            val c = raw(w, k)
+            if (c and TAG != 0 && eliminateFromPeers(w, k, Integer.numberOfTrailingZeros(c and DIGITS), geometry)) changed = true
+        }
+        return changed
     }
 
     // ── reads ───────────────────────────────────────────────
@@ -63,14 +77,14 @@ internal object Kernel {
     fun givenCells(w: LongArray): CellSet = CellSet(w[GIVEN], w[GIVEN + 1])
     fun openCells(w: LongArray): CellSet = CellSet(w[OPEN], w[OPEN + 1])
 
-    /** Cells whose digit bit [d0] is set, filled or open: one `Long.compress` per cell word (D18). */
+    /** Open cells with candidate [d0] (D19): one `Long.compress` per cell word (D18), then the open mask. */
     fun cellsWithCandidate(w: LongArray, d0: Int): CellSet {
         var lo = 0L
         var hi = 0L
         // 54 = 9 words * 6 cells, so the band split falls on a word boundary.
         for (i in 0 until 9) lo = lo or (java.lang.Long.compress(w[i] ushr d0, LANE_ONES) shl (6 * i))
         for (i in 9 until CELL_WORDS) hi = hi or (java.lang.Long.compress(w[i] ushr d0, LANE_ONES) shl (6 * (i - 9)))
-        return CellSet(lo, hi)
+        return CellSet(lo and w[OPEN], hi and w[OPEN + 1])
     }
 
     /** Digit bits of the filled cells of [region]. */
@@ -102,19 +116,26 @@ internal object Kernel {
 
     // ── writes ──────────────────────────────────────────────
 
-    /** Fills [k] with [d0] and removes it from open peers (D12). No-op on a given. */
-    fun place(w: LongArray, k: Int, d0: Int, geometry: Geometry): Boolean {
+    /** Fills [k] with [d0], or replaces a filled cell's digit; peers untouched (D19). No-op on a given. */
+    fun place(w: LongArray, k: Int, d0: Int): Boolean {
         if (isGiven(w, k)) return false
         val v = TAG or (1 shl d0)
-        var changed = raw(w, k) != v
-        if (changed) setRaw(w, k, v)
-        if (eliminateFromPeers(w, k, d0, geometry)) changed = true
-        return changed
+        if (raw(w, k) == v) return false
+        setRaw(w, k, v)
+        return true
     }
 
-    /** Replaces an open or filled cell's content by the candidate set [mask] (tag cleared). No-op on a given. */
+    /** Filled (not given) → open with all nine candidates (D19). */
+    fun clear(w: LongArray, k: Int): Boolean {
+        if (raw(w, k) and TAG == 0 || isGiven(w, k)) return false
+        setRaw(w, k, DIGITS)
+        return true
+    }
+
+    /** Replaces an open cell's candidates by [mask] (digit bits only). No-op on filled cells and givens (D19). */
     fun setCandidates(w: LongArray, k: Int, mask: Int): Boolean {
-        if (isGiven(w, k) || raw(w, k) == mask) return false
+        val c = raw(w, k)
+        if (c and TAG != 0 || c == mask) return false
         setRaw(w, k, mask)
         return true
     }
@@ -187,12 +208,11 @@ internal object Kernel {
      * even when several regions agree. Returns the count. Computed from the cells (D18).
      */
     fun scanHiddenSingles(w: LongArray, geometry: Geometry, out: IntArray): Int {
-        val open = openCells(w)
         val regions = geometry.regions
         val filled = IntArray(regions.size) { filledIn(w, regions[it]) }
         var n = 0
         for (d0 in 0..8) {
-            val candidates = cellsWithCandidate(w, d0) and open
+            val candidates = cellsWithCandidate(w, d0)
             var found = CellSet.EMPTY
             for (r in regions.indices) {
                 if (filled[r] and (1 shl d0) != 0) continue

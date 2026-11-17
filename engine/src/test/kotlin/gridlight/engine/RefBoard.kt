@@ -24,26 +24,29 @@ class RefBoard {
     fun isOpen(k: Int) = cells[k] and 0x200 == 0
     fun openSet() = (0..80).filter { isOpen(it) }
     fun setGiven(k: Int, d0: Int) { cells[k] = 0x200 or (1 shl d0); given[k] = true }
-    fun computeCandidates() {
-        for (k in 0..80) if (given[k]) for (p in peers(k)) if (isOpen(p)) cells[p] = cells[p] and (cells[k] and 0x1FF).inv()
+    fun eliminateFromPeers(k: Int, d0: Int): Boolean {
+        var ch = false
+        for (p in peers(k)) if (isOpen(p) && cells[p] and (1 shl d0) != 0) { cells[p] = cells[p] and (1 shl d0).inv(); ch = true }
+        return ch
+    }
+    fun eliminateFilledFromPeers(): Boolean {
+        var ch = false
+        for (k in 0..80) if (!isOpen(k)) if (eliminateFromPeers(k, Integer.numberOfTrailingZeros(cells[k] and 0x1FF))) ch = true
+        return ch
     }
 
     private fun set(k: Int, v: Int): Boolean { val ch = cells[k] != v; cells[k] = v; return ch }
 
-    fun place(k: Int, d0: Int): Boolean {
-        if (given[k]) return false
-        var ch = set(k, 0x200 or (1 shl d0))
-        for (p in peers(k)) if (isOpen(p) && cells[p] and (1 shl d0) != 0) { cells[p] = cells[p] and (1 shl d0).inv(); ch = true }
-        return ch
-    }
-    fun setCandidates(k: Int, mask: Int): Boolean = if (given[k]) false else set(k, mask)
+    fun place(k: Int, d0: Int): Boolean = if (given[k]) false else set(k, 0x200 or (1 shl d0))
+    fun clear(k: Int): Boolean = if (isOpen(k) || given[k]) false else set(k, 0x1FF)
+    fun setCandidates(k: Int, mask: Int): Boolean = if (!isOpen(k)) false else set(k, mask)
     fun eliminateDigits(k: Int, mask: Int): Boolean {
         if (!isOpen(k) || cells[k] and mask == 0) return false
         cells[k] = cells[k] and mask.inv(); return true
     }
     fun eliminate(k: Int, d0: Int) = eliminateDigits(k, 1 shl d0)
 
-    fun withCandidate(d0: Int) = (0..80).filter { cells[it] and (1 shl d0) != 0 }
+    fun withCandidate(d0: Int) = (0..80).filter { isOpen(it) && cells[it] and (1 shl d0) != 0 }
     fun filledIn(cs: List<Int>) = cs.filter { !isOpen(it) }.fold(0) { a, k -> a or (cells[k] and 0x1FF) }
     fun duplicatesIn(cs: List<Int>): Int {
         var dup = 0

@@ -29,6 +29,16 @@ class GeometryTest {
         }
     }
 
+    @Test fun `region lists are read-only even when cast`() {
+        val lists = listOf(g.regions, g.rows, g.columns, g.boxes) + g.regionsOf(c(0)).let { listOf(g.regionsOf(c(0))) }
+        for (l in lists) {
+            @Suppress("UNCHECKED_CAST") val m = l as MutableList<Region>
+            assertFailsWith<UnsupportedOperationException> { m.add(l[0]) }
+            assertFailsWith<UnsupportedOperationException> { m[0] = l[1] }
+            assertFailsWith<UnsupportedOperationException> { m.removeAt(0) }
+        }
+    }
+
     @Test fun `known regions`() {
         assertEquals((0..8).toList(), g.rows[0].cellIndices.toList())
         assertEquals((0..8).map { it * 9 + 4 }, g.columns[4].cellIndices.toList())
@@ -36,6 +46,8 @@ class GeometryTest {
         assertEquals(listOf(60, 61, 62, 69, 70, 71, 78, 79, 80), g.boxes[8].cellIndices.toList())
         assertEquals("row 3", g.rows[2].toString()); assertEquals("column 5", g.columns[4].toString())
         assertEquals("box 7", g.boxes[6].toString())
+        assertEquals("row 9", g.rows[8].toString()); assertEquals("column 1", g.columns[0].toString())
+        assertEquals("box 1", g.boxes[0].toString()); assertEquals("box 9", g.boxes[8].toString())
         assertEquals(c(31), g.boxes[4][RegionSlot.of(1)])
     }
 

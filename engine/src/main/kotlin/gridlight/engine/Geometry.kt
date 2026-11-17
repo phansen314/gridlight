@@ -43,23 +43,24 @@ class Geometry private constructor() {
         }
 
         val made = ArrayList<Region>(27)
-        for (r in 0..8) made += Region(r, RegionKind.ROW, set(IntArray(9) { r * 9 + it }), IntArray(9) { r * 9 + it })
+        for (r in 0..8) made += Region(r, RegionKind.ROW, r, set(IntArray(9) { r * 9 + it }), IntArray(9) { r * 9 + it })
         for (c in 0..8) {
             val ks = IntArray(9) { it * 9 + c }
-            made += Region(9 + c, RegionKind.COLUMN, set(ks), ks)
+            made += Region(9 + c, RegionKind.COLUMN, c, set(ks), ks)
         }
         for (b in 0..8) {
             val r0 = b / 3 * 3
             val c0 = b % 3 * 3
             val ks = IntArray(9) { (r0 + it / 3) * 9 + c0 + it % 3 }.also { it.sort() }
-            made += Region(18 + b, RegionKind.BOX, set(ks), ks)
+            made += Region(18 + b, RegionKind.BOX, b, set(ks), ks)
         }
-        regions = made
-        rows = made.subList(0, 9)
-        columns = made.subList(9, 18)
-        boxes = made.subList(18, 27)
+        // Immutable copies: callers can't cast and mutate the shared geometry.
+        regions = java.util.List.copyOf(made)
+        rows = java.util.List.copyOf(made.subList(0, 9))
+        columns = java.util.List.copyOf(made.subList(9, 18))
+        boxes = java.util.List.copyOf(made.subList(18, 27))
 
-        regionsOfCell = Array(81) { k -> listOf(rows[k / 9], columns[k % 9], boxes[k / 27 * 3 + k % 9 / 3]) }
+        regionsOfCell = Array(81) { k -> java.util.List.copyOf(listOf(rows[k / 9], columns[k % 9], boxes[k / 27 * 3 + k % 9 / 3])) }
         peerSets = Array(81) { k ->
             var s = CellSet.EMPTY
             for (r in regionsOfCell[k]) s += r.cells

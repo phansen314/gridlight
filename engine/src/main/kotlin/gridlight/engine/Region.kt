@@ -10,6 +10,8 @@ class Region internal constructor(
     /** Its place in [Geometry.regions]. */
     val index: Int,
     val kind: RegionKind,
+    /** Its number within its kind, 0..8 (row 1 is 0). */
+    internal val ordinalInKind: Int,
     /** Its [CellSet.lo] / [CellSet.hi] words are the region's masks, in the shared 54 | 27 split (D7). */
     val cells: CellSet,
     /** The 9 cells, ascending; slot i is `cellIndices[i]`. Read by the inline [forEachCell]. */
@@ -33,8 +35,8 @@ class Region internal constructor(
     }
 
     override fun toString(): String = when (kind) {
-        RegionKind.ROW -> "row ${index + 1}"
-        RegionKind.COLUMN -> "column ${index - 8}"
-        RegionKind.BOX -> "box ${index - 17}"
+        RegionKind.ROW -> "row ${ordinalInKind + 1}"
+        RegionKind.COLUMN -> "column ${ordinalInKind + 1}"
+        RegionKind.BOX -> "box ${ordinalInKind + 1}"
     }
 }

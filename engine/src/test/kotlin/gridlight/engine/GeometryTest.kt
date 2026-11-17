@@ -107,11 +107,12 @@ class GeometryTest {
     @Test fun `kernel tables agree with the peer sets`() {
         for (k in 0..80) {
             val peers = g.peers(c(k)).toList().map { it.k }
-            assertEquals(peers, (0 until 20).map { g.peerCells[k * 20 + it] })
-            assertEquals(peers.map { Layout.POS[it] }, (0 until 20).map { g.peerPos[k * 20 + it] })
-            var lanes = 0
-            for (i in 0 until 14) lanes += java.lang.Long.bitCount(g.peerLanes[k * 14 + i])
-            assertEquals(20, lanes)
+            val fromLanes = mutableListOf<Int>()
+            for (i in 0 until 14) for (slot in 0 until 6) {
+                val bit = (g.peerLanes[k * 14 + i] ushr (slot * 10)) and 0x3FFL
+                if (bit != 0L) { assertEquals(1L, bit, "cell $k word $i slot $slot"); fromLanes += i * 6 + slot }
+            }
+            assertEquals(peers, fromLanes, "peerLanes of cell $k")
         }
         for (r in g.regions) assertEquals(r.cellIndices.map { Layout.POS[it] }, r.bitPos.toList())
     }

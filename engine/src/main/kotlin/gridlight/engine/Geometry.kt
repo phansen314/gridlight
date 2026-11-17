@@ -26,12 +26,6 @@ class Geometry private constructor() {
     private val regionsOfCell: Array<List<Region>>
     private val peerSets: Array<CellSet>
 
-    /** `peerCells[k*20 + j]` = j-th peer of cell k, ascending. */
-    internal val peerCells: IntArray
-
-    /** `peerPos[k*20 + j]` = bit position of the j-th peer of k in the packed cell words. */
-    internal val peerPos: ShortArray
-
     /** `peerLanes[k*14 + i]`: lane-low bit set for every peer of k in cell word i. */
     internal val peerLanes: LongArray
 
@@ -66,14 +60,10 @@ class Geometry private constructor() {
             for (r in regionsOfCell[k]) s += r.cells
             s - CellIndex(k)
         }
-        peerCells = IntArray(81 * 20)
-        peerPos = ShortArray(81 * 20)
         peerLanes = LongArray(81 * 14)
         for (k in 0..80) {
             var j = 0
             peerSets[k].forEach { p ->
-                peerCells[k * 20 + j] = p.k
-                peerPos[k * 20 + j] = Layout.pos(p.k)
                 peerLanes[k * 14 + p.k / 6] = peerLanes[k * 14 + p.k / 6] or (1L shl ((p.k % 6) * 10))
                 j++
             }
